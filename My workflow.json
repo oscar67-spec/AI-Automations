@@ -1,0 +1,528 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        3504,
+        544
+      ],
+      "id": "a5d74063-449c-42d3-9291-4f998b9cbbbb",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "searchText": "need automation -job -hiring lang:en",
+        "limit": 10,
+        "additionalFields": {}
+      },
+      "id": "1aa2cdb4-d6f8-4076-85b2-1ec934ab6a5e",
+      "name": "Search Tweets",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        3728,
+        544
+      ],
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "q6B1Oy5p2I9qZaFf",
+          "name": "X account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst cleanedLeads = [];\n\nfor (const item of items) {\n  const tweet = item.json;\n  \n  // Skip if no user data\n  if (!tweet.author_id && !tweet.user) continue;\n  \n  const tweetText = tweet.text || '';\n  if (!tweetText) continue;\n  \n  // Filter out job postings\n  const textLower = tweetText.toLowerCase();\n  const badWords = ['hiring', 'job opening', 'we are hiring', 'join our team'];\n  if (badWords.some(word => textLower.includes(word))) continue;\n  \n  cleanedLeads.push({\n    json: {\n      tweet_id: tweet.id,\n      tweet_text: tweetText.substring(0, 280),\n      tweet_url: `https://twitter.com/user/status/${tweet.id}`,\n      author_id: tweet.author_id,\n      found_date: new Date().toISOString().split('T')[0]\n    }\n  });\n}\n\nreturn cleanedLeads;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3936,
+        544
+      ],
+      "id": "9c323046-7d6c-4316-ab1b-65382eb7fe21",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "user",
+        "user": {
+          "__rl": true,
+          "value": "={{ $json.author_id}}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        544
+      ],
+      "id": "5ff026b9-c123-4034-9897-f906a48cd203",
+      "name": "Get User",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "q6B1Oy5p2I9qZaFf",
+          "name": "X account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const user = $input.item.json;\nconst tweet = $('Code in JavaScript').item.json;\nconst bio = user.description || user.bio || '';\n\nconst urlRegex = /(https?:\\/\\/[^\\s]+)|(www\\.[^\\s]+)|([a-zA-Z0-9-]+\\.(com|io|co|net|org|ai|app))/gi;\nconst matches = bio.match(urlRegex) || [];\n\nlet domain = '';\n\nfor (let match of matches) {\n  try {\n    match = match.replace(/[.,;!?)]+$/, '');\n    if (!match.startsWith('http')) {\n      match = 'https://' + match;\n    }\n    \n    const url = new URL(match);\n    domain = url.hostname.replace('www.', '');\n    \n    const skipDomains = ['twitter.com', 'x.com', 'linkedin.com', 't.co'];\n    if (!skipDomains.some(skip => domain.includes(skip))) {\n      break;\n    } else {\n      domain = '';\n    }\n  } catch (e) {\n    continue;\n  }\n}\n\nreturn {\n  json: {\n    tweet_id: tweet.tweet_id,\n    tweet_text: tweet.tweet_text,\n    tweet_url: tweet.tweet_url,\n    found_date: tweet.found_date,\n    name: user.name || user.username,\n    username: user.username,\n    bio: bio,\n    followers: user.public_metrics?.followers_count || 0,\n    domain: domain,\n    has_domain: domain ? true : false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        544
+      ],
+      "id": "05693de8-d018-4ed2-aaa1-fd0fd818bdf4",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fa1d5cd6-8ef9-457d-b291-9413d078a4ec",
+              "leftValue": "={{ $('Code in JavaScript1').item.json.has_domain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4624,
+        544
+      ],
+      "id": "a3a26c6d-84ab-4da1-be09-f26e77dab13c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": " https://api.apollo.io/v1/people/match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Api-key",
+              "value": "yPE-m0be2JMWQ2Vt3CnlJw"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tweet_id",
+              "value": "={{ $json.tweet_id }}"
+            },
+            {
+              "name": "tweet_text",
+              "value": "={{ $json.tweet_text }}"
+            },
+            {
+              "name": "tweet_url",
+              "value": "={{ $json.tweet_url }}"
+            },
+            {
+              "name": "found_date",
+              "value": "={{ $json.found_date }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "username",
+              "value": "={{ $json.username }}"
+            },
+            {
+              "name": "bio",
+              "value": "={{ $json.bio }}"
+            },
+            {
+              "name": "followers",
+              "value": "={{ $json.followers }}"
+            },
+            {
+              "name": "domain",
+              "value": "={{ $json.domain }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4848,
+        544
+      ],
+      "id": "8ee167b4-5483-4a42-beea-00d2a85ead42",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "97a9318c-2e69-43ce-8583-956bf01806d6",
+              "leftValue": "={{ $json.person.email }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5072,
+        544
+      ],
+      "id": "7de6aedb-c56b-4e62-97d1-96b136960748",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "b6487dc2-bf1c-4779-b73c-cc132e72f17f",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        5376,
+        768
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "EkrDRfQOJbehqMov",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a personalized cold email to {{ $json.name }}.\n\nTheir tweet: \"{{ $json.tweet_text }}\"\nTheir bio: \"{{ $json.bio }}\"\nTheir website: {{ $json.domain }}\nTwitter username: @{{ $json.username }}",
+        "options": {
+          "systemMessage": "You are an expert at writing personalized cold emails for automation services.\n\nYour task is to write a friendly, concise email (under 100 words) that:\n- References their specific tweet about needing automation\n- Mentions something from their bio to show you did research\n- Offers to help with automation solutions\n- Has a clear call-to-action\n- Sounds natural and conversational, not salesy\n\nReturn ONLY the email body text, no subject line."
+        }
+      },
+      "id": "180daefd-b0f0-49fe-963d-d2cc34e61a0d",
+      "name": "Generate Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5296,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('HTTP Request').item.json.person.email }}",
+        "subject": "Saw your tweet about automation",
+        "message": "={{ $('Generate Email').item.json.output }}",
+        "options": {}
+      },
+      "id": "5f47c40c-8c3d-4a70-be5a-66c348bfe8c7",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        5664,
+        512
+      ],
+      "webhookId": "871a46f4-6eee-4755-8999-910679db4dea",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "fqkDWIXKO6ojC298",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1XQULRONRmQmUI_MSSPhQPGR7FTTe95TOs-oy4bvMVFc",
+          "mode": "list",
+          "cachedResultName": "Twitter Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XQULRONRmQmUI_MSSPhQPGR7FTTe95TOs-oy4bvMVFc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XQULRONRmQmUI_MSSPhQPGR7FTTe95TOs-oy4bvMVFc/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.found_date }}",
+            "email": "={{ $json.email }}",
+            "domain": "={{ $json.domain }}",
+            "name": "={{ $json.name }}",
+            "tweet ": "={{ $json.tweet_text }}",
+            "status": "Emailed"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tweet ",
+              "displayName": "tweet ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "domain",
+              "displayName": "domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "69d9a49d-314a-41bb-89ed-e0207a9d6c66",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5888,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "301Hi6uqJi2fai4t",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search Tweets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Tweets": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Generate Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "642c1238-ef2e-4b80-a242-e150e24bbd3a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "56839131a5a7bf6fefc2db899e478d0125c873bbd1d230275e68f850c6078d4a"
+  },
+  "id": "33wH3VBSwT9aOlzg",
+  "tags": []
+}
